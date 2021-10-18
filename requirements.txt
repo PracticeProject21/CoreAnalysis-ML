@@ -1,0 +1,8 @@
+joblib==1.1.0
+numpy==1.21.2
+Pillow==8.4.0
+scikit-learn==1.0
+scipy==1.7.1
+threadpoolctl==3.0.0
+torch==1.9.1
+typing-extensions==3.10.0.2
