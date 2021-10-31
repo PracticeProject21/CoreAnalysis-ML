@@ -2,7 +2,10 @@ from PIL import Image
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
+
 import DateCategories
+
 
 root = 'C:/Users/tolik/information_technology/third_year/practice_project/CoreAnalysis-ML'
 data = pd.read_csv('{}/data_for_study/data.csv'.format(root))
@@ -106,3 +109,18 @@ def show_colormap(colormap=DateCategories.labels_colors):
 
     plt.subplots_adjust(wspace=2, hspace=2)
     plt.show()
+    # plt.savefig('colormap for distribution of types.png')
+
+
+def rgb_hist(image_path):
+    image = cv2.imread(image_path)
+    blue_hist = cv2.calcHist([image], [0], None, [256], [0, 256])
+    green_hist = cv2.calcHist([image], [1], None, [256], [0, 256])
+    red_hist = cv2.calcHist([image], [2], None, [256], [0, 256])
+
+    fig, ax = plt.subplots(nrows=3)
+    ax[0].plot(blue_hist, 'b-')
+    ax[1].plot(green_hist, 'g-')
+    ax[2].plot(red_hist, 'r-')
+    plt.show()
+    plt.savefig('{}/rgb_hist_{}.png'.format())
