@@ -4,13 +4,28 @@ import pandas as pd
 root = 'C:/Users/tolik/information_technology/third_year/practice_project/CoreAnalysis-ML'
 data = pd.read_csv('{}/data_for_study/data.csv'.format(root))
 
+
 all_photos = data['photo_id'].unique().tolist()
 all_tasks = data['task_id'].unique().tolist()
+
 ultraviolet_photos = data[data['photo_type']=='УФ']['photo_id'].unique().tolist()
 daylight_photos = data[data['photo_type']=='ДС']['photo_id'].unique().tolist()
 
+# оставим часто встречающиеся породы
+delete = data[data['segment_value'] \
+                    .isin(['Глинисто-кремнистая порода',
+                           'Уголь',
+                           'Аргиллит углистый', 'Алевролит',
+                           'Карбонатная порода','Известняк',
+                           'Глина аргиллитоподобная'])] \
+                    ['photo_id'].unique().tolist()
 
+# оставим только часто встречающиеся породы
+photo_for_train = list(set(all_photos) - set(delete))
+ultra_for_model = ultraviolet_photos
+day_for_model = [i for i in daylight_photos if i in photo_for_train]
 
+# Сделаем из текущих масок one-hot encoded маски
 colors_for_ultraviolet = {
         'Отсутствует': 20,
         'Насыщенное': 21,

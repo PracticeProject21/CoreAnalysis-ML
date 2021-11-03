@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-
 import DateCategories
 
 
@@ -124,3 +123,29 @@ def rgb_hist(image_path):
     ax[2].plot(red_hist, 'r-')
     plt.show()
     plt.savefig('{}/rgb_hist_{}.png'.format())
+
+
+def visual_img_and_mask(photo_id, roots, photo_type='ultraviolet'):
+    image = cv2.imread(roots[0] + '{}.jpeg'.format(photo_id))
+    mask = cv2.imread(roots[1] + photo_type + '/label_{}.png'.format(photo_id))
+    mask_npz = np.load(roots[2] + photo_type + '/label_{}.npz'.format(photo_id))
+    image = cv2.resize(image, (512, 7680))
+    mask = cv2.resize(mask, (512, 7680))
+    mask_npz = mask_npz['x']
+    mask_npz = cv2.resize(mask_npz, (512, 7680))
+
+    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 20))
+
+    axes[0].imshow(image)
+    axes[0].set_title('image')
+
+    axes[1].imshow(mask)
+    axes[1].set_title('mask')
+
+    axes[2].imshow(mask_npz)
+    axes[2].set_title('mask_npz')
+
+    print('Size of Mask: {}\n'
+          'Size of image: {}\n'
+          'Size of Mask_npz: {}\n'
+          .format(mask.shape, image.shape, mask_npz.shape))
