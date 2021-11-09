@@ -3,11 +3,15 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as T
 import numpy as np
 import cv2
+import albumentations as albu
 
-IMAGE_PATH = ''
-MASK_PATH = ''
+IMAGE_PATH = 'C:/Users/tolik/information_technology/third_year/practice_project/CoreAnalysis-ML/data_for_study/photos/'
+ULTRA_MASK_PATH = 'C:/Users/tolik/information_technology/third_year/practice_project/CoreAnalysis-ML/data_for_study/labels/ultraviolet/label_'
+DAY_MASK_PATH = 'C:/Users/tolik/information_technology/third_year/practice_project/CoreAnalysis-ML/data_for_study/labels/daylight/label_'
 
-class UltraPhotoDataSet(Dataset):
+########################################################
+# Datasets
+class CoreDataset(Dataset):
     def __init__(self, img_path, mask_path, data,
                  augmentation,
                  patching):
@@ -37,8 +41,30 @@ class UltraPhotoDataSet(Dataset):
 
         if self.patching:
             img, mask = self.patch(img, mask)
-        
+
         return img, mask
 
     def patch(self, img, mask):
+        # реализавать разбивку изображения на части
         return img, mask
+
+class UltravioletDataset(CoreDataset):
+    classes = ['Отсутствует, Карбонатное, Насыщенное']
+
+class DaylightDataset(CoreDataset):
+    classes = ['Переслаивание пород, Алевролит глинистый, Песчаник,'
+               'Аргиллит, Разлом, Проба']
+
+########################################################
+
+
+########################################################
+# Albumentations
+augment_1 = albu.Compose([
+    albu.HorizontalFlip(),
+    albu.VerticalFlip(),
+    albu.RandomBrightnessContrast((0,0.5),(0,0.5)),
+    albu.Resize(256, )
+])
+
+########################################################
