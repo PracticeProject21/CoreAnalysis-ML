@@ -56,12 +56,11 @@ def train_model(model, N_classes, model_name,
     statistic_dict = {'pixel_accuracy_val':[], 'IoU_val':[],
                       'pixel_accuracy_train': [], 'IoU_train': [],
                       'loss_train':[], 'loss_val':[]}
-    min_loss = np.inf
-    decrease = 0 # будем вести счетчик падения loss-функции
-    device = model.to(device)
+    max_iou = -1
+    model = model.to(device)
 
     for epoch in range(num_epochs):
-        print(f'Epoch № {epoch+1}')
+        print(f'Epoch № {epoch+1}', flush=True)
         for phase in ['training', 'validation']:
             running_loss = 0
             running_iou = 0
@@ -71,10 +70,14 @@ def train_model(model, N_classes, model_name,
                 model.train()
                 for img, mask in tqdm(train_dl):
                     if patch:
-                        ## реализовать разбивку
-                        pass
-                    #img = img.to(device)
-                    #mask = mask.to(device)
+                        # делаем один большой батч из патчированных изображений
+                        b_size, p_size, c, h, w = img.shape
+                        img = img.view(-1, c, h, w)
+
+                        b_size, p_size, h, w = mask.shape
+                        mask = mask.view(-1, h, w)
+                    img = img.to(device)
+                    mask = mask.to(device)
 
                     optimizer.zero_grad()
                     predict = model(img)
@@ -116,9 +119,9 @@ def train_model(model, N_classes, model_name,
                         running_iou += IoU(predict, mask, number_of_class=N_classes)
 
                     # подсчет статистик для тренировочной фазы
-                loss_value_mean = running_loss / len(train_dl)
-                accuracy_value_mean = running_accuracy / len(train_dl)
-                iou_value_mean = running_iou / len(train_dl)
+                loss_value_mean = running_loss / len(val_dl)
+                accuracy_value_mean = running_accuracy / len(val_dl)
+                iou_value_mean = running_iou / len(val_dl)
                 statistic_dict['loss_val'].append(loss_value_mean)
                 statistic_dict['pixel_accuracy_val'].append(accuracy_value_mean)
                 statistic_dict['IoU_val'].append(iou_value_mean)
@@ -127,12 +130,11 @@ def train_model(model, N_classes, model_name,
                       f'validation-accuracy: {accuracy_value_mean}',
                       f'validation-iou: {iou_value_mean}', sep='\n')
 
-                if loss_value_mean < min_loss:
-                    decrease += 1
-                    if decrease % 3 == 0:
-                        print('saving model ...')
-                        torch.save(model,
-                                   f'{model_name}_{iou_value_mean}iou_{accuracy_value_mean}acc')
+                if iou_value_mean > max_iou:
+                    max_iou = iou_value_mean
+                    print('saving model ...')
+                    torch.save(model,
+                               f'{model_name}_{round(iou_value_mean,3)}iou_{round(accuracy_value_mean,3)}acc.pth')
 
     return statistic_dict
 def prediction(model, image):
