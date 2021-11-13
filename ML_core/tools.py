@@ -1,7 +1,9 @@
 import torch
 import numpy as np
+from PIL import Image
 import torch.nn.functional as f
 from tqdm import tqdm
+import torchvision.transforms as tt
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -137,5 +139,76 @@ def train_model(model, N_classes, model_name,
                                f'{model_name}_{round(iou_value_mean,3)}iou_{round(accuracy_value_mean,3)}acc.pth')
 
     return statistic_dict
-def prediction(model, image):
-    pass
+
+
+#######################################################
+# функция для предсказания
+#######################################################
+def model_predict(model, img):
+    # изображение в формате np или PIL
+    # img = Image.fromarray(img)
+    # разобаться с ошибкой byte
+
+    # сохраним исходный размер
+    w, h = img.size
+
+    # предобработка изображения
+    need_tf = tt.Compose([
+        tt.Resize([768, 512]),
+        tt.ToTensor(),
+        tt.Normalize(mean=[0.485, 0.456, 0.406],
+                     std=[0.229, 0.224, 0.225])
+    ])
+    transformed_img = need_tf(img)
+
+    # нахождение маски
+    pred = model.predict(transformed_img.unsqueeze(0))
+    pred = (pred.argmax(dim=1))
+    pred = tt.Resize([h, w])(pred)
+    pred = pred.squeeze()
+
+    return pred.numpy()
+
+def convert_into_rgb(labelformat, mask):
+    # labelformat = 'ultra' or 'day'
+    # переведем маски из hot в rgb
+    colormap = np.array([(0, 0, 0),  # 1 Переслаивание / отсутствует
+                              (128, 0, 128),  # 2 Алевролит глинистый / насыщенное
+                              (250, 233, 0),  # 3 Песчаник / Карбонатное
+                              (0, 128, 90),  # 4 Аргиллит
+                              (192, 128, 0),  # 5 Глинисто-кремнистая порода
+                              (227, 178, 248),  # 6 Песчаник глинистый
+                              (128, 128, 128),  # 7 Уголь
+                              (0, 250, 221),  # 8 Аргиллит углистый
+                              (64, 64, 192),  # 9 Алевролит
+                              (255, 5, 255),  # 10 Карбонатная порода
+                              (230, 5, 20),  # 11 Известняк
+                              (124, 0, 30),  # 12 Глина аргиллитоподобная
+                              (111, 247, 0),  # 13 Разлом
+                              (0, 206, 247)])  # 14 Проба
+    r = np.zeros_like(mask).astype(np.uint8)
+    g = np.zeros_like(mask).astype(np.uint8)
+    b = np.zeros_like(mask).astype(np.uint8)
+
+    if labelformat == 'ultra':
+        for l in range(3):
+            idx = mask == l
+            r[idx] = colormap[l, 0]
+            g[idx] = colormap[l, 1]
+            b[idx] = colormap[l, 2]
+    else:
+        for l in range(14):
+            idx = mask == l
+            r[idx] = colormap[l, 0]
+            g[idx] = colormap[l, 1]
+            b[idx] = colormap[l, 2]
+
+    rgb = np.stack([r, g, b], axis=2)
+    return rgb
+
+def prediction(model, img, format, path, img_id):
+    # format: 'ultra' or 'day'
+    predict = model_predict(model, img)
+    rgb_mask = convert_into_rgb(format, predict)
+    rgb_mask = Image.fromarray(rgb_mask)
+    rgb_mask.save(path + f'/{format}/{img_id}.png')
