@@ -11,10 +11,9 @@ data = pd.read_csv('{}/data_for_study/data.csv'.format(root))
 path_to_labels = 'C:/Users/tolik/information_technology/third_year/practice_project/CoreAnalysis-ML/data_for_study/labels'
 
 
-
-
 def convert_into_rgb(labelformat, mask, colormap = DateCategories.labels_colors):
     # labelformat = 'ultra' or 'day'
+    # переведем маски из hot в rgb
 
     r = np.zeros_like(mask).astype(np.uint8)
     g = np.zeros_like(mask).astype(np.uint8)
@@ -38,6 +37,8 @@ def convert_into_rgb(labelformat, mask, colormap = DateCategories.labels_colors)
 
 
 def change_segments(photo_id, directory_name, colors):
+    # функция для перекраски масок
+    # (одинаковые типы сегментов будут одинакового цвета)
     temp_df = data[data.photo_id == photo_id]
     num_of_sg = len(temp_df)
     task_id = temp_df.task_id.unique()[0]
@@ -73,6 +74,7 @@ def change_segments(photo_id, directory_name, colors):
 
 
 def show_colormap(colormap=DateCategories.labels_colors):
+    # цвета каждого класса (см. colormap*.png)
     colormap = colormap / 255.
     fig, axes = plt.subplots(nrows=7, ncols=2)
     axes[0, 0].set(title='Переслаивание пород',
@@ -112,6 +114,7 @@ def show_colormap(colormap=DateCategories.labels_colors):
 
 
 def rgb_hist(image_path):
+    # построение гистограммы для каждого канала некоторого RGB фото
     image = cv2.imread(image_path)
     blue_hist = cv2.calcHist([image], [0], None, [256], [0, 256])
     green_hist = cv2.calcHist([image], [1], None, [256], [0, 256])
@@ -126,6 +129,7 @@ def rgb_hist(image_path):
 
 
 def visual_img_and_mask(photo_id, roots, photo_type='ultraviolet'):
+    # визуализация маски и изображения (оригинальных)
     image = cv2.imread(roots[0] + '{}.jpeg'.format(photo_id))
     mask = cv2.imread(roots[1] + photo_type + '/label_{}.png'.format(photo_id))
     mask_npz = np.load(roots[2] + photo_type + '/label_{}.npz'.format(photo_id))
@@ -149,3 +153,19 @@ def visual_img_and_mask(photo_id, roots, photo_type='ultraviolet'):
           'Size of image: {}\n'
           'Size of Mask_npz: {}\n'
           .format(mask.shape, image.shape, mask_npz.shape))
+
+
+def distribution(data_csv, data_id, classes):
+    # функция для подсчета распределения разных типов сегментов по классам
+    # в выборке data_id (фото в УФ или фото в ДС)
+    result = {}
+
+    for class_name in classes:
+        result[class_name] = 0
+
+    for id in data_id:
+        classes_on_photo = data_csv[data_csv.photo_id == id]['segment_value'].unique().tolist()
+        for class_name in classes_on_photo:
+            result[class_name] += 1
+
+    return result
