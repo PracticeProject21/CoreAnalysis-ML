@@ -1,11 +1,10 @@
 import torch
 import numpy as np
 from PIL import Image
+import cv2
 import torch.nn.functional as f
 from tqdm import tqdm
 import torchvision.transforms as tt
-
-DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 ##############################################################################
 # Метрики для оценивания модели
@@ -54,12 +53,11 @@ def train_model(model, N_classes, model_name,
                 train_dl, val_dl, num_epochs,
                 pixel_accuracy = pixel_accuracy,
                 IoU = IoU,
-                patch=False, device=DEVICE):
+                patch=False):
     statistic_dict = {'pixel_accuracy_val':[], 'IoU_val':[],
                       'pixel_accuracy_train': [], 'IoU_train': [],
                       'loss_train':[], 'loss_val':[]}
     max_iou = -1
-    model = model.to(device)
 
     for epoch in range(num_epochs):
         print(f'Epoch № {epoch+1}', flush=True)
@@ -78,8 +76,8 @@ def train_model(model, N_classes, model_name,
 
                         b_size, p_size, h, w = mask.shape
                         mask = mask.view(-1, h, w)
-                    img = img.to(device)
-                    mask = mask.to(device)
+                    # img = img.to(device)
+                    # mask = mask.to(device)
 
                     optimizer.zero_grad()
                     predict = model(img)
@@ -110,8 +108,8 @@ def train_model(model, N_classes, model_name,
                         if patch:
                             ## реализовать разбивку
                             pass
-                        img = img.to(device)
-                        mask = mask.to(device)
+                        # img = img.to(device)
+                        # mask = mask.to(device)
 
                         predict = model(img)
                         loss_value = loss(predict, mask)
@@ -136,7 +134,7 @@ def train_model(model, N_classes, model_name,
                     max_iou = iou_value_mean
                     print('saving model ...')
                     torch.save(model,
-                               f'{model_name}_{round(iou_value_mean,3)}iou_{round(accuracy_value_mean,3)}acc.pth')
+                               f'{model_name}.pth')
 
     return statistic_dict
 
@@ -206,9 +204,13 @@ def convert_into_rgb(labelformat, mask):
     rgb = np.stack([r, g, b], axis=2)
     return rgb
 
-def prediction(model, img, format, path, img_id):
+def prediction(model, img, format, path, img_id, post_proccessing=True):
     # format: 'ultra' or 'day'
     predict = model_predict(model, img)
     rgb_mask = convert_into_rgb(format, predict)
+
+    if post_proccessing:
+        rgb_mask = cv2.medianBlur(rgb_mask, 211)
+
     rgb_mask = Image.fromarray(rgb_mask)
     rgb_mask.save(path + f'/{format}/{img_id}.png')

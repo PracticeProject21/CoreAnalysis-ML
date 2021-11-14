@@ -17,13 +17,32 @@ delete = data[data['segment_value'] \
                            'Уголь',
                            'Аргиллит углистый', 'Алевролит',
                            'Карбонатная порода','Известняк',
-                           'Глина аргиллитоподобная'])] \
+                           'Глина аргиллитоподобная',
+                           'Песчаник глинистый'])] \
                     ['photo_id'].unique().tolist()
 
 # оставим только часто встречающиеся породы
 photo_for_train = list(set(all_photos) - set(delete))
 ultra_for_model = ultraviolet_photos
 day_for_model = [i for i in daylight_photos if i in photo_for_train]
+
+# сбалансированные выборки
+data = data[data['photo_id'].isin(photo_for_train)]
+argillit = data[data.segment_value=='Аргиллит']['photo_id'][:280].unique()
+peshanik = data[data.segment_value=='Песчаник']['photo_id'][:240].unique()
+alevrolit = data[data.segment_value=='Алевролит глинистый']['photo_id'][:300].unique()
+# layering = data[data.segment_value=='Переслаивание пород']['photo_id'][:100].unique()
+proba = data[data.segment_value=='Проба']['photo_id'].unique()
+balance_day_data = list(set(proba) | set(peshanik) | set(argillit) | set(alevrolit))
+# print(f'Длина сбалансированной выборки для ДС: {len(balance_day_data)}')
+
+carbonat = data[data.segment_value=='Карбонатное']['photo_id'].unique()
+saturate = data[data.segment_value=='Насыщенное']['photo_id'][:150].unique()
+balance_ultra_data = list(set(saturate) | set(carbonat))
+# print(f'Длина сбалансированной выборки для УФ: {len(balance_ultra_data)}')
+
+# print(data[data['photo_id'].isin(balance_ultra_data)].groupby(['segment_value']).count())
+# print(data[data['photo_id'].isin(balance_day_data)].groupby(['segment_value']).count())
 
 # Сделаем из текущих масок one-hot encoded маски
 colors_for_ultraviolet = {
@@ -62,3 +81,4 @@ labels_colors = np.array([(0, 0, 0),        # 1 Переслаивание / о�
                           (124, 0, 30),     # 12 Глина аргиллитоподобная
                           (111, 247, 0),    # 13 Разлом
                           (0, 206, 247)])   # 14 Проба
+
