@@ -46,18 +46,21 @@ class CoreDataset(Dataset):
         img = self.transformation(img)
         mask = torch.from_numpy(mask).long()
 
+        if self.patching:
+            img, mask = self.patch(img, mask)
+
         return img, mask
 
-    #     def patch(self, img, mask, w=512):
-    #         # input: resized img (3, h, w) and mask (h,w)
-    #         img_patches = img.unfold(1, w, step=w).unfold(2, w, step=w)
-    #         img_patches = img_patches.contiguous().view(3, -1, w, w) # chanell - number of patches - h - w
-    #         img_patches = img_patches.contiguous().permute(1, 0, 2, 3)
+    def patch(self, img, mask, w=224):
+             # input: resized img (3, h, w_1) and mask (h,w_1)
+            img_patches = img.unfold(1, w, step=w).unfold(2, w, step=w)
+            img_patches = img_patches.contiguous().view(3, -1, w, w) # chanell - number of patches - h - w
+            img_patches = img_patches.contiguous().permute(1, 0, 2, 3)
 
-    #         mask_patches = mask.unfold(1, w, step=w).unfold(2, w, step=w)
-    #         mask_patches = mask_patches.contiguous().view(-1, w, w) # chanell - number of patches - h - w
+            mask_patches = mask.unfold(1, w, step=w).unfold(2, w, step=w)
+            mask_patches = mask_patches.contiguous().view(-1, w, w) # chanell - number of patches - h - w
 
-    #         return img_patches, mask_patches
+            return img_patches, mask_patches
 
 
 class UltravioletDataset(CoreDataset):

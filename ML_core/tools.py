@@ -69,6 +69,7 @@ def train_model(model, N_classes, model_name,
 
                 model.train()
                 for img, mask in tqdm(train_dl):
+
                     if patch:
                         # делаем один большой батч из патчированных изображений
                         b_size, p_size, c, h, w = img.shape
@@ -81,6 +82,7 @@ def train_model(model, N_classes, model_name,
 
                     optimizer.zero_grad()
                     predict = model(img)
+
                     loss_value = loss(predict, mask)
                     loss_value.backward()
                     optimizer.step()
@@ -102,12 +104,16 @@ def train_model(model, N_classes, model_name,
                       f'train-accuracy: {accuracy_value_mean}',
                       f'train-iou: {iou_value_mean}', sep='\n')
             else:
+                model.train(False)
                 model.eval()
                 with torch.no_grad():
                     for img, mask in tqdm(val_dl):
                         if patch:
-                            ## реализовать разбивку
-                            pass
+                            b_size, p_size, c, h, w = img.shape
+                            img = img.view(-1, c, h, w)
+
+                            b_size, p_size, h, w = mask.shape
+                            mask = mask.view(-1, h, w)
                         # img = img.to(device)
                         # mask = mask.to(device)
 
@@ -142,7 +148,7 @@ def train_model(model, N_classes, model_name,
 #######################################################
 # функция для предсказания
 #######################################################
-def model_predict(model, img):
+def model_predict(model, img, h_tf = 768, w_tf = 512):
     # изображение в формате np или PIL
     # img = Image.fromarray(img)
     # разобаться с ошибкой byte
@@ -152,38 +158,38 @@ def model_predict(model, img):
 
     # предобработка изображения
     need_tf = tt.Compose([
-        tt.Resize([768, 512]),
+        tt.Resize([h_tf, w_tf]),
         tt.ToTensor(),
         tt.Normalize(mean=[0.485, 0.456, 0.406],
                      std=[0.229, 0.224, 0.225])
     ])
     transformed_img = need_tf(img)
 
-    # нахождение маски
-    pred = model.predict(transformed_img.unsqueeze(0))
-    pred = (pred.argmax(dim=1))
-    pred = tt.Resize([h, w])(pred)
-    pred = pred.squeeze()
+    with torch.no_grad():    # нахождение маски
+        pred = model.predict(transformed_img.unsqueeze(0))
+        pred = (pred.argmax(dim=1))
+        pred = tt.Resize([h, w])(pred)
+        pred = pred.squeeze()
 
     return pred.numpy()
 
 def convert_into_rgb(labelformat, mask):
     # labelformat = 'ultra' or 'day'
     # переведем маски из hot в rgb
-    colormap = np.array([(0, 0, 0),  # 1 Переслаивание / отсутствует
-                              (128, 0, 128),  # 2 Алевролит глинистый / насыщенное
-                              (250, 233, 0),  # 3 Песчаник / Карбонатное
-                              (0, 128, 90),  # 4 Аргиллит
-                              (192, 128, 0),  # 5 Глинисто-кремнистая порода
-                              (227, 178, 248),  # 6 Песчаник глинистый
-                              (128, 128, 128),  # 7 Уголь
-                              (0, 250, 221),  # 8 Аргиллит углистый
-                              (64, 64, 192),  # 9 Алевролит
-                              (255, 5, 255),  # 10 Карбонатная порода
-                              (230, 5, 20),  # 11 Известняк
-                              (124, 0, 30),  # 12 Глина аргиллитоподобная
-                              (111, 247, 0),  # 13 Разлом
-                              (0, 206, 247)])  # 14 Проба
+    colormap = np.array([(0, 0, 0),        # 1 Переслаивание / отсутствует
+                          (128, 0, 128),    # 2 Алевролит глинистый / насыщенное
+                          (250, 233, 0),    # 3 Песчаник / Карбонатное
+                          (0, 128, 90),     # 4 Аргиллит
+                          (0, 206, 247),    # 5 Проба
+                          (111, 247, 0),    # 6 Разлом
+                          (128, 128, 128),  # 7 Уголь
+                          (0, 250, 221),    # 8 Аргиллит углистый
+                          (64, 64, 192),    # 9 Алевролит
+                          (255, 5, 255),    # 10 Карбонатная порода
+                          (230, 5, 20),     # 11 Известняк
+                          (124, 0, 30),     # 12 Глина аргиллитоподобная
+                          (192, 128, 0),    # 13 Глинисто-кремнистая порода
+                          (227, 178, 248)])  # 14 Песчаник глинистый
     r = np.zeros_like(mask).astype(np.uint8)
     g = np.zeros_like(mask).astype(np.uint8)
     b = np.zeros_like(mask).astype(np.uint8)
@@ -210,7 +216,93 @@ def prediction(model, img, format, path, img_id, post_proccessing=True):
     rgb_mask = convert_into_rgb(format, predict)
 
     if post_proccessing:
-        rgb_mask = cv2.medianBlur(rgb_mask, 211)
+        rgb_mask = cv2.GaussianBlur(rgb_mask, (17, 17), 0)
 
     rgb_mask = Image.fromarray(rgb_mask)
-    rgb_mask.save(path + f'/{format}/{img_id}.png')
+    rgb_mask.save(path + f'/{format}/{img_id}.jpg')
+
+
+def text_generation(predict_mask, label, step_h=10, step_w=4):
+    # mask in two-dimension numpy array ONLY WHICH HEIGHT IS MORE THAN 100 pixels
+    # label is 'ultra' or 'day'
+    result = []
+    if label == 'ultraviolet':
+
+        classes = ['Отсутствует', 'Насыщенное', 'Карбонатное']
+        # в матрицах числами 0 обозначаены области, где свечение отсутствует
+        #            числами 1 обозначаены области, где свечение насыщенное
+        #            числами 2 обозначаены области, где свечение карбонатное
+    else:
+        classes = ['Переслаивание пород', 'Алевролит глинистый',
+                   'Песчаник', 'Аргиллит', 'Разлом', 'Проба']
+    h, w = predict_mask.shape
+
+    one_percent = h // step_h
+    one_percent_w = w // step_w
+
+    last_class_name = ''  # необходим для того, чтобы разграничивать области между собой
+
+    for i in range(step_h - 1):
+        temporary = []
+        i_part_of_mask = predict_mask[(i * one_percent): ((i + 1) * one_percent)][:]
+        for j in range(step_w - 1):
+            ij_part_of_mask = i_part_of_mask[:, (j * one_percent_w): ((j + 1) * one_percent_w)]
+            ij_part_of_mask = ij_part_of_mask.flatten()
+
+            index_of_main_class = np.argmax(np.bincount(ij_part_of_mask))
+
+            class_name = classes[index_of_main_class]
+            if class_name not in temporary:
+                temporary.append(class_name)
+
+        last_j_part_of_mask = i_part_of_mask[:, (step_w - 1) * one_percent_w:]
+        last_j_part_of_mask = last_j_part_of_mask.flatten()
+        index_of_main_class = np.argmax(np.bincount(last_j_part_of_mask))
+
+        class_name = classes[index_of_main_class]
+        if class_name not in temporary:
+            temporary.append(class_name)
+
+        if len(temporary) == 1:
+            if temporary[0] != last_class_name:
+                tuple_result = (round(i / (step_h), 2), temporary[0])
+                result.append(tuple_result)
+                last_class_name = temporary[0]
+        else:
+            if tuple(temporary) != result[-1][1:]:
+                tuple_result = (round(i / (step_h), 2),) + tuple(set(temporary) - set(result[-1][1:]))
+                result.append(tuple_result)
+                last_class_name = ''
+
+    last_part_of_mask = predict_mask[((step_h - 1) * one_percent):, :]
+    temporary = []
+    for j in range(step_w - 1):
+        ij_part_of_mask = last_part_of_mask[:, j * one_percent_w: (j + 1) * one_percent_w]
+        ij_part_of_mask = ij_part_of_mask.flatten()
+
+        index_of_main_class = np.argmax(np.bincount(ij_part_of_mask))
+
+        class_name = classes[index_of_main_class]
+        if class_name not in temporary:
+            temporary.append(class_name)
+
+    last_j_part_of_mask = last_part_of_mask[:, (step_w - 1) * one_percent_w:]
+    last_j_part_of_mask = last_j_part_of_mask.flatten()
+    index_of_main_class = np.argmax(np.bincount(last_j_part_of_mask))
+
+    class_name = classes[index_of_main_class]
+    if class_name not in temporary:
+        temporary.append(class_name)
+
+    if len(temporary) == 1:
+        if temporary[0] != last_class_name:
+            tuple_result = (round((step_h-1) / (step_h), 2), temporary[0])
+            result.append(tuple_result)
+            last_class_name = temporary[0]
+    else:
+        if tuple(temporary) != result[-1][1:]:
+            tuple_result = (round((step_h-1) / (step_h), 2),) + tuple((set(temporary) - set(result[-1][1:])))
+            result.append(tuple_result)
+            last_class_name = ''
+
+    return result
