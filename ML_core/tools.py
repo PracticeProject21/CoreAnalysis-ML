@@ -148,7 +148,10 @@ def train_model(model, N_classes, model_name,
 #######################################################
 # функция для предсказания
 #######################################################
-def model_predict(model, img, h_tf = 768, w_tf = 512, patch=False):
+import torchvision.transforms as tt
+
+
+def model_predict(model, img, h_tf=768, w_tf=512, patch=False):
     # изображение в формате np или PIL
     # img = Image.fromarray(img)
     # разобаться с ошибкой byte
@@ -164,16 +167,24 @@ def model_predict(model, img, h_tf = 768, w_tf = 512, patch=False):
                      std=[0.229, 0.224, 0.225])
     ])
     transformed_img = need_tf(img)
-    transformed_img = transformed_img.unsqueeze(0)
+
     if patch:
         w_step = 224
         transformed_img = transformed_img.unfold(1, w_step, step=w_step).unfold(2, w_step, step=w_step)
-        transformed_img = transformed_img.contiguous().view(3, -1, w_step, w_step)  # chanell - number of patches - h - w
+        transformed_img = transformed_img.contiguous().view(3, -1, w_step,
+                                                            w_step)  # chanell - number of patches - h - w
         transformed_img = transformed_img.contiguous().permute(1, 0, 2, 3)
 
-
-    with torch.no_grad():    # нахождение маски
+    else:
+        transformed_img = transformed_img.unsqueeze(0)
+    with torch.no_grad():  # нахождение маски
         pred = model.predict(transformed_img)
+
+        if patch:
+            pred = pred.view(1, 20, 1, 6, 224, 224)
+            pred = pred.permute(0, 3, 1, 4, 2, 5).contiguous()
+            pred = pred.view(1, 6, h_tf, w_tf)
+
         pred = (pred.argmax(dim=1))
         pred = tt.Resize([h, w])(pred)
         pred = pred.squeeze()
@@ -229,7 +240,7 @@ def prediction(model, img, format, path, img_id, post_proccessing=True):
     rgb_mask.save(path + f'/{format}/{img_id}.jpg')
 
 
-def text_generation_local(predict_mask, label, step_h=10, step_w=4):
+def text_generation(predict_mask, label, step_h=10, step_w=4):
     # label is 'ultra' or 'day'
     result = []
     if label == 'ultraviolet':
@@ -240,7 +251,7 @@ def text_generation_local(predict_mask, label, step_h=10, step_w=4):
         #            числами 2 обозначаены области, где свечение карбонатное
     else:
         classes = ['Переслаивание пород', 'Алевролит глинистый',
-                   'Песчаник', 'Аргиллит', 'Разлом', 'Проба']
+                   'Песчаник', 'Аргиллит', 'Проба', 'Разлом']
     h, w = predict_mask.shape
 
     one_percent = h // step_h
