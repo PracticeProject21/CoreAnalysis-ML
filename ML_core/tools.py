@@ -124,7 +124,7 @@ def train_model(model, N_classes, model_name,
                         running_accuracy += pixel_accuracy(predict, mask)
                         running_iou += IoU(predict, mask, number_of_class=N_classes)
 
-                    # подсчет статистик для тренировочной фазы
+                    # подсчет статистик для валидационной фазы
                 loss_value_mean = running_loss / len(val_dl)
                 accuracy_value_mean = running_accuracy / len(val_dl)
                 iou_value_mean = running_iou / len(val_dl)
@@ -148,7 +148,7 @@ def train_model(model, N_classes, model_name,
 #######################################################
 # функция для предсказания
 #######################################################
-def model_predict(model, img, h_tf = 768, w_tf = 512):
+def model_predict(model, img, h_tf = 768, w_tf = 512, patch=False):
     # изображение в формате np или PIL
     # img = Image.fromarray(img)
     # разобаться с ошибкой byte
@@ -164,9 +164,16 @@ def model_predict(model, img, h_tf = 768, w_tf = 512):
                      std=[0.229, 0.224, 0.225])
     ])
     transformed_img = need_tf(img)
+    transformed_img = transformed_img.unsqueeze(0)
+    if patch:
+        w_step = 224
+        transformed_img = transformed_img.unfold(1, w_step, step=w_step).unfold(2, w_step, step=w_step)
+        transformed_img = transformed_img.contiguous().view(3, -1, w_step, w_step)  # chanell - number of patches - h - w
+        transformed_img = transformed_img.contiguous().permute(1, 0, 2, 3)
+
 
     with torch.no_grad():    # нахождение маски
-        pred = model.predict(transformed_img.unsqueeze(0))
+        pred = model.predict(transformed_img)
         pred = (pred.argmax(dim=1))
         pred = tt.Resize([h, w])(pred)
         pred = pred.squeeze()
@@ -222,8 +229,7 @@ def prediction(model, img, format, path, img_id, post_proccessing=True):
     rgb_mask.save(path + f'/{format}/{img_id}.jpg')
 
 
-def text_generation(predict_mask, label, step_h=10, step_w=4):
-    # mask in two-dimension numpy array ONLY WHICH HEIGHT IS MORE THAN 100 pixels
+def text_generation_local(predict_mask, label, step_h=10, step_w=4):
     # label is 'ultra' or 'day'
     result = []
     if label == 'ultraviolet':
@@ -262,14 +268,19 @@ def text_generation(predict_mask, label, step_h=10, step_w=4):
         class_name = classes[index_of_main_class]
         if class_name not in temporary:
             temporary.append(class_name)
-
         if len(temporary) == 1:
             if temporary[0] != last_class_name:
                 tuple_result = (round(i / (step_h), 2), temporary[0])
                 result.append(tuple_result)
                 last_class_name = temporary[0]
         else:
-            if tuple(temporary) != result[-1][1:]:
+            if len(result) == 0:
+                result.append((0.0,)+ tuple(temporary))
+            elif set(temporary) != set(result[-1][1:]) and len(result[-1][1:]) > len(temporary):
+                tuple_result = (round(i / (step_h), 2),) + tuple(set(result[-1][1:]) - set(temporary))
+                result.append(tuple_result)
+                last_class_name = ''
+            elif set(temporary) != set(result[-1][1:]) and len(result[-1][1:]) < len(temporary):
                 tuple_result = (round(i / (step_h), 2),) + tuple(set(temporary) - set(result[-1][1:]))
                 result.append(tuple_result)
                 last_class_name = ''
@@ -300,9 +311,12 @@ def text_generation(predict_mask, label, step_h=10, step_w=4):
             result.append(tuple_result)
             last_class_name = temporary[0]
     else:
-        if tuple(temporary) != result[-1][1:]:
-            tuple_result = (round((step_h-1) / (step_h), 2),) + tuple((set(temporary) - set(result[-1][1:])))
-            result.append(tuple_result)
-            last_class_name = ''
-
+        if set(temporary) != set(result[-1][1:]) and len(result[-1][1:]) > len(temporary):
+                tuple_result = (round((step_h-1) / (step_h), 2),) + tuple(set(result[-1][1:]) - set(temporary))
+                result.append(tuple_result)
+                last_class_name = ''
+        elif set(temporary) != set(result[-1][1:]) and len(result[-1][1:]) < len(temporary):
+                tuple_result = (round((step_h-1) / (step_h), 2),) + tuple(set(temporary) - set(result[-1][1:]))
+                result.append(tuple_result)
+                last_class_name = ''
     return result
